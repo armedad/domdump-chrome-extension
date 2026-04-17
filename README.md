@@ -33,6 +33,16 @@ After clicking **Open URL & download .md**, you should see `[dom-scrape-md]` lin
 
 The `.md` includes: title, URL, timestamp, plain text (main/article/body fallback), heading outline, links, tables (limited rows), meta tags, optional HTML.
 
+### Follow links (one `.md` per page)
+
+1. Fill **“URL must contain”** with a substring that must appear in each link’s absolute URL, **case-insensitive** (e.g. `loopnet.com/Listing`).
+2. Set **Max pages total** — the **first** page is always the page you opened (or the active tab); then matching links from that page are visited in order, up to this cap (max 100).
+3. Only **http/https** links are followed. Each successful page produces **one** Markdown download with a unique filename (`dom-scrape-p00-…`, `p01-…`, …).
+
+**Active-tab mode:** the extension will **navigate the same tab** through each URL in sequence (you leave the original page until it finishes). **Open-URL mode** uses one background tab the same way.
+
+If some pages fail (timeout, block), others can still succeed; the popup lists **partial errors** when that happens.
+
 ## Notes
 
 - **Restricted pages** (`chrome://`, Web Store, etc.) cannot be scripted.

@@ -1,5 +1,7 @@
 const WAIT_MS_AFTER_LOAD = 2500;
 const POLL_MS = 250;
+const DEFAULT_MAX_PAGES = 30;
+const ABS_MAX_PAGES = 100;
 
 /** Passed to injected scraper via chrome.storage.local (session storage is SW-only). */
 const PENDING_SCRAPE_KEY = "__domScrapeMd_pending__";
@@ -11,13 +13,24 @@ function log(...args) {
   console.info("[dom-scrape-md]", ...args);
 }
 
-function safeFilename(title) {
-  const base = (title || "scrape")
+function simpleUrlHash(url) {
+  let h = 0;
+  const s = String(url);
+  for (let i = 0; i < s.length; i += 1) {
+    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h).toString(16).padStart(8, "0").slice(0, 10);
+}
+
+function markdownFilename(title, pageUrl, pageIndex) {
+  const base = (title || "page")
     .replace(/[/\\?%*:|"<>]/g, "-")
     .replace(/\s+/g, "-")
-    .slice(0, 80);
-  const ts = new Date().toISOString().replace(/[:.]/g, "-");
-  return `dom-scrape-${base}-${ts}.md`;
+    .slice(0, 60);
+  const idx = pageIndex !== undefined && pageIndex !== null ? `p${String(pageIndex).padStart(2, "0")}-` : "";
+  const h = simpleUrlHash(pageUrl);
+  const ts = Date.now();
+  return `dom-scrape-${idx}${base}-h${h}-${ts}.md`;
 }
 
 async function recordLastRun(payload) {
@@ -138,10 +151,118 @@ async function scrapeTabToDownloads(tabId, options) {
   if (!payload || typeof payload.markdown !== "string") {
     throw new Error("Invalid scrape payload (missing markdown).");
   }
-  const filename = safeFilename(payload.title);
+  const filename = markdownFilename(
+    payload.title,
+    payload.pageUrl,
+    options?.pageIndex
+  );
   await downloadMarkdown(filename, payload.markdown, !!options?.saveAs);
   log("scrapeTabToDownloads complete", { filename });
   return { ok: true, filename };
+}
+
+function normalizeHttpUrl(href) {
+  try {
+    const u = new URL(href);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    u.hash = "";
+    return u.href;
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Collect absolute http(s) links on the page whose URL contains `needle` (case-insensitive).
+ */
+async function collectMatchingLinks(tabId, needle) {
+  const n = String(needle || "").trim();
+  if (!n) return [];
+
+  const [{ result }] = await chrome.scripting.executeScript({
+    target: { tabId, allFrames: false },
+    func: (needleRaw) => {
+      const needleLc = String(needleRaw || "").trim().toLowerCase();
+      if (!needleLc) return [];
+      const out = [];
+      const seen = new Set();
+      for (const a of document.querySelectorAll("a[href]")) {
+        try {
+          const raw = a.getAttribute("href");
+          if (!raw) continue;
+          const abs = new URL(raw, location.href).href;
+          if (!abs.startsWith("http")) continue;
+          if (abs.toLowerCase().includes(needleLc) && !seen.has(abs)) {
+            seen.add(abs);
+            out.push(abs);
+          }
+        } catch (_) {
+          /* skip */
+        }
+      }
+      return out;
+    },
+    args: [n],
+  });
+
+  return Array.isArray(result) ? result : [];
+}
+
+function buildVisitList(mainUrl, extras, maxTotal) {
+  const cap = Math.min(ABS_MAX_PAGES, Math.max(1, maxTotal));
+  const seen = new Set();
+  const ordered = [];
+
+  const push = (u) => {
+    const norm = normalizeHttpUrl(u);
+    if (!norm || seen.has(norm)) return;
+    seen.add(norm);
+    ordered.push(norm);
+  };
+
+  push(mainUrl);
+  for (const u of extras) push(u);
+  return ordered.slice(0, cap);
+}
+
+function clampMaxPages(n) {
+  const x = Number.parseInt(String(n), 10);
+  if (Number.isNaN(x)) return DEFAULT_MAX_PAGES;
+  return Math.min(ABS_MAX_PAGES, Math.max(1, x));
+}
+
+async function scrapeMultiplePages(tabId, urls, options) {
+  const filenames = [];
+  const errors = [];
+
+  for (let i = 0; i < urls.length; i += 1) {
+    const u = urls[i];
+    try {
+      if (i > 0) {
+        log("navigate to linked page", { i, u });
+        await chrome.tabs.update(tabId, { url: u });
+        await waitUntilTabComplete(tabId, 180_000);
+        await new Promise((r) => setTimeout(r, WAIT_MS_AFTER_LOAD));
+      }
+      const r = await scrapeTabToDownloads(tabId, { ...options, pageIndex: i });
+      filenames.push(r.filename);
+    } catch (e) {
+      const msg = `${u}: ${e?.message || e}`;
+      errors.push(msg);
+      log("page scrape failed", msg);
+    }
+  }
+
+  if (filenames.length === 0) {
+    throw new Error(errors.join("\n") || "All page scrapes failed.");
+  }
+
+  return {
+    ok: true,
+    filenames,
+    count: filenames.length,
+    errors: errors.length ? errors : undefined,
+  };
 }
 
 async function waitUntilTabComplete(tabId, timeoutMs) {
@@ -161,8 +282,29 @@ async function runScrapeActive(options) {
     throw new Error("Cannot scrape this page type (restricted URL).");
   }
   log("runScrapeActive", { tabId: tab.id, url: tab.url });
-  const res = await scrapeTabToDownloads(tab.id, options);
-  await recordLastRun({ ok: true, filename: res.filename });
+
+  const filter = String(options.linkContains || "").trim();
+  let res;
+  if (filter) {
+    await waitUntilTabComplete(tab.id, 60_000);
+    await new Promise((r) => setTimeout(r, WAIT_MS_AFTER_LOAD));
+    const mainUrl = (await chrome.tabs.get(tab.id)).url || tab.url;
+    const extras = await collectMatchingLinks(tab.id, filter);
+    const maxTotal = clampMaxPages(options.maxTotalPages);
+    const urls = buildVisitList(mainUrl, extras, maxTotal);
+    log("follow links", { filter, extras: extras.length, visiting: urls.length });
+    res = await scrapeMultiplePages(tab.id, urls, options);
+  } else {
+    res = await scrapeTabToDownloads(tab.id, options);
+  }
+
+  await recordLastRun({
+    ok: true,
+    filename: res.filename || res.filenames?.[res.filenames.length - 1],
+    filenames: res.filenames,
+    count: res.count || (res.filename ? 1 : 0),
+    errors: res.errors,
+  });
   return res;
 }
 
@@ -180,7 +322,19 @@ async function runScrapeUrl(url, options) {
   log("runScrapeUrl post-load delay", WAIT_MS_AFTER_LOAD);
   await new Promise((r) => setTimeout(r, WAIT_MS_AFTER_LOAD));
 
-  const res = await scrapeTabToDownloads(tab.id, options);
+  const filter = String(options.linkContains || "").trim();
+  let res;
+  if (filter) {
+    const mainUrl = (await chrome.tabs.get(tab.id)).url || raw;
+    const extras = await collectMatchingLinks(tab.id, filter);
+    const maxTotal = clampMaxPages(options.maxTotalPages);
+    const urls = buildVisitList(mainUrl, extras, maxTotal);
+    log("follow links", { filter, extras: extras.length, visiting: urls.length });
+    res = await scrapeMultiplePages(tab.id, urls, options);
+  } else {
+    res = await scrapeTabToDownloads(tab.id, options);
+  }
+
   if (options.closeTabAfter) {
     try {
       await chrome.tabs.remove(tab.id);
@@ -194,7 +348,14 @@ async function runScrapeUrl(url, options) {
       /* ignore */
     }
   }
-  await recordLastRun({ ok: true, filename: res.filename });
+
+  await recordLastRun({
+    ok: true,
+    filename: res.filename || res.filenames?.[res.filenames.length - 1],
+    filenames: res.filenames,
+    count: res.count || (res.filename ? 1 : 0),
+    errors: res.errors,
+  });
   return res;
 }
 

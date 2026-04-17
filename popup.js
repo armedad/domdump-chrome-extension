@@ -1,4 +1,6 @@
 const urlInput = document.getElementById("url");
+const linkContainsInput = document.getElementById("linkContains");
+const maxTotalPagesInput = document.getElementById("maxTotalPages");
 const includeHtml = document.getElementById("includeHtml");
 const closeTab = document.getElementById("closeTab");
 const saveAs = document.getElementById("saveAs");
@@ -16,7 +18,22 @@ function options() {
     includeHtml: includeHtml.checked,
     closeTabAfter: closeTab.checked,
     saveAs: saveAs.checked,
+    linkContains: linkContainsInput.value.trim(),
+    maxTotalPages: Number.parseInt(String(maxTotalPagesInput.value), 10) || 30,
   };
+}
+
+function formatSuccess(res) {
+  if (res?.filenames?.length) {
+    const err = res.errors?.length
+      ? `\n\nPartial errors (${res.errors.length}):\n${res.errors.slice(0, 5).join("\n")}${res.errors.length > 5 ? "\n…" : ""}`
+      : "";
+    return `Downloaded ${res.count} file(s). Check Downloads.${err}\n\n${res.filenames.join("\n")}`;
+  }
+  if (res?.filename) {
+    return `Download started: ${res.filename}\n(Check Downloads / Chrome download bar.)`;
+  }
+  return "Done.";
 }
 
 btnOpen.addEventListener("click", async () => {
@@ -36,7 +53,7 @@ btnOpen.addEventListener("click", async () => {
     });
     console.info("[dom-scrape-md popup] SCRAPE_URL result", res);
     if (res?.ok) {
-      setStatus(`Download started: ${res.filename}\n(Check Downloads / Chrome download bar.)`, "ok");
+      setStatus(formatSuccess(res), "ok");
     } else {
       setStatus(res?.error || "Failed.", "err");
     }
@@ -63,7 +80,7 @@ btnCurrent.addEventListener("click", async () => {
     });
     console.info("[dom-scrape-md popup] SCRAPE_ACTIVE result", res);
     if (res?.ok) {
-      setStatus(`Saved: ${res.filename}`, "ok");
+      setStatus(formatSuccess(res), "ok");
     } else {
       setStatus(res?.error || "Failed.", "err");
     }
@@ -76,13 +93,15 @@ btnCurrent.addEventListener("click", async () => {
   }
 });
 
-chrome.storage.local.get(["lastUrl", "lastRun"], (r) => {
+chrome.storage.local.get(["lastUrl", "lastLinkFilter", "lastMaxPages", "lastRun"], (r) => {
   if (r.lastUrl) urlInput.value = r.lastUrl;
+  if (r.lastLinkFilter != null) linkContainsInput.value = r.lastLinkFilter;
+  if (r.lastMaxPages != null) maxTotalPagesInput.value = String(r.lastMaxPages);
   if (r.lastRun?.at) {
     const ageMin = Math.round((Date.now() - r.lastRun.at) / 60000);
     if (ageMin <= 60) {
       const line = r.lastRun.ok
-        ? `Last run (${ageMin}m ago): saved ${r.lastRun.filename || "file"}.`
+        ? `Last run (${ageMin}m ago): ${r.lastRun.count || 1} file(s).`
         : `Last run (${ageMin}m ago) failed: ${r.lastRun.error || "unknown error"}.`;
       const hint = document.createElement("div");
       hint.style.cssText = "margin-top:8px;font-size:11px;color:#666;";
@@ -95,4 +114,13 @@ chrome.storage.local.get(["lastUrl", "lastRun"], (r) => {
 urlInput.addEventListener("change", () => {
   const v = urlInput.value.trim();
   if (v) chrome.storage.local.set({ lastUrl: v });
+});
+
+linkContainsInput.addEventListener("change", () => {
+  chrome.storage.local.set({ lastLinkFilter: linkContainsInput.value.trim() });
+});
+
+maxTotalPagesInput.addEventListener("change", () => {
+  const n = Number.parseInt(String(maxTotalPagesInput.value), 10);
+  if (!Number.isNaN(n)) chrome.storage.local.set({ lastMaxPages: n });
 });

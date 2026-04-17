@@ -8,7 +8,7 @@
         box-sizing: border-box;
       }
       body {
-        width: 360px;
+        width: 400px;
         margin: 0;
         padding: 12px;
         font: 13px/1.4 system-ui, -apple-system, Segoe UI, sans-serif;
@@ -89,6 +89,19 @@
     <div class="row">
       <label for="url">Open &amp; scrape URL</label>
       <input id="url" type="url" placeholder="https://example.com/..." spellcheck="false" />
+    </div>
+    <div class="row">
+      <label for="linkContains">Also dump linked pages — URL must contain (optional, case-insensitive)</label>
+      <input
+        id="linkContains"
+        type="text"
+        placeholder="e.g. loopnet.com/Listing"
+        spellcheck="false"
+      />
+    </div>
+    <div class="row">
+      <label for="maxTotalPages">Max pages total (main + links, cap 100)</label>
+      <input id="maxTotalPages" type="number" min="1" max="100" value="30" />
     </div>
     <div class="checks">
       <label><input type="checkbox" id="includeHtml" /> Include HTML snapshot (large)</label>

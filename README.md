@@ -1,5 +1,35 @@
 # DOM to Markdown (Chrome extension)
 
+## Install from GitHub
+
+Source repo: **https://github.com/armedad/domdump-chrome-extension**
+
+This extension is **not** on the Chrome Web Store — install it as an **unpacked** extension from a copy of the repo.
+
+### Option A: Download ZIP (no Git)
+
+1. Open **https://github.com/armedad/domdump-chrome-extension**
+2. Click the green **Code** button → **Download ZIP**
+3. Unzip the archive (you’ll get a folder like `domdump-chrome-extension-main`)
+
+### Option B: Clone with Git
+
+```bash
+git clone https://github.com/armedad/domdump-chrome-extension.git
+cd domdump-chrome-extension
+```
+
+### Load in Chrome
+
+1. Open **`chrome://extensions`**
+2. Turn on **Developer mode** (top right)
+3. Click **Load unpacked**
+4. Select the folder that contains **`manifest.json`** (the unzipped repo root, or the cloned `domdump-chrome-extension` folder — not a parent directory)
+5. Approve permissions when prompted (`<all_urls>` is expected for arbitrary sites)
+6. Optionally **pin** the extension to the toolbar
+
+---
+
 Opens a URL (optional) or scrapes the **active tab**, walks the DOM, and downloads a **Markdown** file to your Downloads folder for downstream processing.
 
 ## Where to look in DevTools (important)
@@ -13,12 +43,6 @@ Extension code **does not log** to the website’s tab console (e.g. LoopNet’s
 | Injected scraper (`[dom-scrape-md:page]` lines) | DevTools on the **target page** → console filter `dom-scrape-md` (may show as the extension’s isolated world depending on Chrome version) |
 
 After clicking **Open URL & download .md**, you should see `[dom-scrape-md]` lines in the **service worker** console within a few seconds. If there are **zero** lines, the click may not be reaching the background (reload the extension).
-
-## Install (unpacked)
-
-1. Open Chrome → **Extensions** → enable **Developer mode**.
-2. **Load unpacked** → select this folder: `coding/chrome-extension-dom-scrape-md/`.
-3. Approve permissions (`<all_urls>` is required so you can scrape arbitrary sites you choose).
 
 ## Use
 

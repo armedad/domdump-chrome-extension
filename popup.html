@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>DOM to Markdown</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        width: 360px;
+        margin: 0;
+        padding: 12px;
+        font: 13px/1.4 system-ui, -apple-system, Segoe UI, sans-serif;
+        color: #1a1a1a;
+      }
+      h1 {
+        font-size: 14px;
+        margin: 0 0 10px;
+        font-weight: 600;
+      }
+      label {
+        display: block;
+        margin-bottom: 4px;
+        color: #444;
+      }
+      input[type="url"],
+      input[type="text"] {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font: inherit;
+      }
+      .row {
+        margin-bottom: 10px;
+      }
+      .checks {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin: 8px 0;
+      }
+      button {
+        width: 100%;
+        padding: 8px 10px;
+        border: none;
+        border-radius: 6px;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 6px;
+      }
+      button.primary {
+        background: #1a73e8;
+        color: #fff;
+      }
+      button.primary:hover {
+        background: #1557b0;
+      }
+      button.secondary {
+        background: #f1f3f4;
+        color: #202124;
+      }
+      button.secondary:hover {
+        background: #e8eaed;
+      }
+      button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      #status {
+        margin-top: 10px;
+        font-size: 12px;
+        color: #555;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .err {
+        color: #b3261e;
+      }
+      .ok {
+        color: #137333;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>DOM → Markdown</h1>
+    <div class="row">
+      <label for="url">Open &amp; scrape URL</label>
+      <input id="url" type="url" placeholder="https://example.com/..." spellcheck="false" />
+    </div>
+    <div class="checks">
+      <label><input type="checkbox" id="includeHtml" /> Include HTML snapshot (large)</label>
+      <label><input type="checkbox" id="closeTab" /> Close tab after scrape (URL flow)</label>
+      <label><input type="checkbox" id="saveAs" /> Prompt “Save as…”</label>
+    </div>
+    <button id="openScrape" class="primary" type="button">Open URL &amp; download .md</button>
+    <button id="currentScrape" class="secondary" type="button">Scrape active tab &amp; download .md</button>
+    <div id="status"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>

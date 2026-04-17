@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "DOM to Markdown",
+  "version": "1.0.5",
+  "description": "Open a URL (or use the current tab), scrape the DOM, and download a .md file.",
+  "permissions": ["tabs", "scripting", "downloads", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "DOM to Markdown"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
